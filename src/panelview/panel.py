@@ -74,7 +74,7 @@ class ProcessPanel(Widget):
                 text=True,
                 bufsize=1,
             )
-            self.call_from_thread(self._set_status, "running")
+            self.app.call_from_thread(self._set_status, "running")
 
             t_out = threading.Thread(
                 target=self._read_pipe, args=(self._proc.stdout, self._log_stdout), daemon=True
@@ -87,13 +87,13 @@ class ProcessPanel(Widget):
             t_out.join()
             t_err.join()
             self._proc.wait()
-            self.call_from_thread(self._set_done, self._proc.returncode)
+            self.app.call_from_thread(self._set_done, self._proc.returncode)
         except Exception as exc:
-            self.call_from_thread(self._set_status, f"error: {exc}")
+            self.app.call_from_thread(self._set_status, f"error: {exc}")
 
     def _read_pipe(self, pipe, log: RichLog) -> None:
         for line in pipe:
-            self.call_from_thread(log.write, line.rstrip("\n"))
+            self.app.call_from_thread(log.write, line.rstrip("\n"))
 
     # --- actions ---
 

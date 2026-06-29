@@ -1,6 +1,6 @@
 # panelview
 
-TUI panel viewer for parallel subprocesses. Each process gets its own scrollable panel; navigate between them with the keyboard.
+TUI for watching multiple subprocesses in parallel. Each process gets a full-window browser-style tab with independent stdout/stderr views and live scrollable output.
 
 ## Install
 
@@ -10,22 +10,30 @@ make venv
 python3 -m venv .venv && .venv/bin/pip install -e .
 ```
 
+Requires Python 3.11+ and [textual](https://github.com/Textualize/textual) ≥ 8.
+
 ## Try it
 
 ```bash
-make demo       # three silly processes with mixed stdout/stderr
-make demo-fail  # same but one process exits non-zero
+make demo       # three processes: counter, stdout+stderr alternator, fast burst
+make demo-fail  # same but one process exits non-zero — shows failed state
 ```
 
 ## Usage
 
 ### CLI
 
-Each positional argument is a shell command:
+Each positional argument is a shell command. Use `-t`/`--title` before a command to name its tab:
 
 ```bash
-panelview "cmd1 arg" "cmd2 arg" "cmd3 arg"
+panelview "cmd1 arg" "cmd2 arg"
+
+panelview -t align   "bwa mem ref.fa reads.fq > out.bam" \
+          -t count   "featureCounts -a genes.gtf out.bam -o counts.txt" \
+          -t fastqc  "fastqc reads.fq"
 ```
+
+Without `-t`, tabs are numbered `Process 1`, `Process 2`, etc.
 
 ### Python API
 
@@ -60,13 +68,13 @@ Each process occupies a full-window tab. There are two navigation modes:
 | `Shift+→` | Switch to stderr |
 | `Shift+↑` | Return to tab mode |
 
-A bar appears at the top of the panel showing which stream is active while in stream-select mode.
+A bar appears at the top of the panel showing the active stream while in stream-select mode.
 
 ## Stop menu (`Ctrl+C`)
 
 Opens a modal with three choices (arrow keys + `Enter` to select, `Escape` to cancel):
 
-- **Send SIGTERM to current process** — politely stop the focused tab's process
+- **Send SIGTERM to current process** — stop the focused tab's process
 - **Send SIGTERM to all processes** — stop everything
 - **Kill all and exit** — SIGTERM all processes and quit panelview
 
@@ -79,7 +87,4 @@ Finished processes keep their tab; the tab title gains a suffix:
 | `[done 0]` | Exited cleanly |
 | `[failed N]` | Exited with code N |
 
-## Requirements
-
-- Python 3.11+
-- [textual](https://github.com/Textualize/textual) ≥ 0.50
+Use `Ctrl+X` to explicitly close and remove a tab.

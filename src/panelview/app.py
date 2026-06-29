@@ -15,12 +15,11 @@ class PanelApp(App):
     }
     TabPane {
         padding: 0;
-        height: 100%;
     }
     ProcessPanel {
         layout: vertical;
-        height: 100%;
-        width: 100%;
+        height: 1fr;
+        width: 1fr;
     }
     RichLog {
         height: 1fr;

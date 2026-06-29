@@ -6,60 +6,72 @@ import threading
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label, RichLog
 
 
 class ProcessPanel(Widget):
-    """Single panel: title bar + scrollable stdout or stderr for one subprocess."""
+    """Full-window panel: stream bar + scrollable stdout or stderr."""
 
-    CAN_FOCUS = True
+    CAN_FOCUS = False  # focus goes to the inner RichLog, not the panel itself
 
-    BINDINGS = [
-        Binding("e", "toggle_stream", "stdout/stderr"),
-        Binding("s", "signal_menu", "Send signal"),
-    ]
-
-    status: reactive[str] = reactive("starting")
     active_stream: reactive[str] = reactive("stdout")
 
-    def __init__(self, cmd: str | list, title: str | None = None, **kwargs: Any) -> None:
+    def __init__(self, cmd: str | list, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._cmd = cmd
-        self._title = title or (cmd if isinstance(cmd, str) else " ".join(cmd))
         self._proc: subprocess.Popen | None = None
         self._log_stdout: RichLog | None = None
         self._log_stderr: RichLog | None = None
 
     def compose(self) -> ComposeResult:
-        yield Label(self._make_label(), id="title")
+        yield Label("", id="stream-bar", classes="hidden")
         yield RichLog(highlight=False, markup=False, wrap=True, id="log-stdout")
         yield RichLog(highlight=False, markup=False, wrap=True, id="log-stderr", classes="hidden")
 
     def on_mount(self) -> None:
-        # Capture widget refs on the main thread — safe to use from worker threads via call_from_thread.
         self._log_stdout = self.query_one("#log-stdout", RichLog)
         self._log_stderr = self.query_one("#log-stderr", RichLog)
         self.run_worker(self._stream_process, thread=True)
 
-    # --- reactives ---
+    # --- stream mode bar ---
 
-    def watch_status(self, _: str) -> None:
-        self._update_title()
+    def set_stream_mode(self, active: bool) -> None:
+        bar = self.query_one("#stream-bar", Label)
+        if active:
+            bar.remove_class("hidden")
+            self._update_stream_bar()
+        else:
+            bar.add_class("hidden")
 
-    def watch_active_stream(self, _: str) -> None:
-        self._update_title()
-
-    def _update_title(self) -> None:
+    def _update_stream_bar(self) -> None:
         try:
-            self.query_one("#title", Label).update(self._make_label())
+            bar = self.query_one("#stream-bar", Label)
+            if "hidden" in bar.classes:
+                return
+            so = "[b]STDOUT[/b]" if self.active_stream == "stdout" else "stdout"
+            se = "[b]STDERR[/b]" if self.active_stream == "stderr" else "stderr"
+            bar.update(f"← {so}   {se} →    (Shift+↑ to exit)")
         except Exception:
             pass
 
-    def _make_label(self) -> str:
-        return f"[{self.status}] {self._title}  [{self.active_stream}]"
+    # --- stream switching ---
+
+    def set_stream(self, stream: str) -> None:
+        self.query_one(f"#log-{self.active_stream}").add_class("hidden")
+        self.active_stream = stream
+        log = self.query_one(f"#log-{stream}", RichLog)
+        log.remove_class("hidden")
+        log.focus()
+        self._update_stream_bar()
+
+    def focus_log(self) -> None:
+        try:
+            self.query_one(f"#log-{self.active_stream}", RichLog).focus()
+        except Exception:
+            pass
 
     # --- subprocess streaming ---
 
@@ -74,8 +86,6 @@ class ProcessPanel(Widget):
                 text=True,
                 bufsize=1,
             )
-            self.app.call_from_thread(self._set_status, "running")
-
             t_out = threading.Thread(
                 target=self._read_pipe, args=(self._proc.stdout, self._log_stdout), daemon=True
             )
@@ -89,24 +99,22 @@ class ProcessPanel(Widget):
             self._proc.wait()
             self.app.call_from_thread(self._set_done, self._proc.returncode)
         except Exception as exc:
-            self.app.call_from_thread(self._set_status, f"error: {exc}")
+            self.app.call_from_thread(self._notify_error, str(exc))
 
     def _read_pipe(self, pipe, log: RichLog) -> None:
         for line in pipe:
             self.app.call_from_thread(log.write, line.rstrip("\n"))
 
-    # --- actions ---
+    def _set_done(self, returncode: int) -> None:
+        # Notify the app to update the tab title.
+        self.post_message(self.Done(self, returncode))
 
-    def action_toggle_stream(self) -> None:
-        other = "stderr" if self.active_stream == "stdout" else "stdout"
-        self.query_one(f"#log-{self.active_stream}").add_class("hidden")
-        self.query_one(f"#log-{other}").remove_class("hidden")
-        self.active_stream = other
-
-    def action_signal_menu(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            from panelview.signals import SignalModal
-            self.app.push_screen(SignalModal(self))
+    def _notify_error(self, msg: str) -> None:
+        self.post_message(self.Done(self, -1))
+        try:
+            self._log_stderr.write(f"[launch error] {msg}")
+        except Exception:
+            pass
 
     # --- public API ---
 
@@ -118,15 +126,13 @@ class ProcessPanel(Widget):
         if self._proc and self._proc.poll() is None:
             self._proc.terminate()
 
-    # --- state helpers ---
+    def is_running(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
 
-    def _set_status(self, status: str) -> None:
-        self.status = status
+    # --- message ---
 
-    def _set_done(self, returncode: int) -> None:
-        if returncode == 0:
-            self.status = "done 0"
-            self.add_class("done")
-        else:
-            self.status = f"failed {returncode}"
-            self.add_class("failed")
+    class Done(Message):
+        def __init__(self, panel: ProcessPanel, returncode: int) -> None:
+            super().__init__()
+            self.panel = panel
+            self.returncode = returncode

@@ -8,12 +8,13 @@ Standalone TUI for watching multiple subprocesses in parallel. Each process gets
 
 | File | Role |
 |------|------|
-| `src/panelview/__init__.py` | `PanelRunner` — public API: `.add(cmd, title)` + `.run()` |
-| `src/panelview/app.py` | `PanelApp(App)` — tabbed layout, global key bindings, mode state |
+| `src/panelview/__init__.py` | `PanelRunner` — public API: `add`, `run`, `run_with`, `add_live` |
+| `src/panelview/app.py` | `PanelApp(App)` — tabbed layout, key bindings, `add_process` |
 | `src/panelview/panel.py` | `ProcessPanel(Widget)` — one tab per process |
 | `src/panelview/signals.py` | `SignalModal`, `CtrlCModal` — modal screens |
 | `src/panelview/__main__.py` | CLI: positional args are shell commands; `-t/--title` names a tab |
-| `Makefile` | `make venv` (stamp-file, skips if up to date), `make demo`, `make demo-fail` |
+| `examples/demo_live.py` | Live pipeline demo using `run_with` |
+| `Makefile` | `make venv`, `make demo`, `make demo-live`, `make demo-fail` |
 
 ## Layout
 
@@ -30,6 +31,17 @@ Standalone TUI for watching multiple subprocesses in parallel. Each process gets
 - `active_stream` tracks `"stdout"` | `"stderr"`; the inactive log gets `.hidden` (`display: none`)
 - `ProcessPanel.Done(Message)` — posted on process exit; bubbles up to App to update the tab title
 - `Message` is imported from `textual.message`, not nested under `Widget` in textual 8.x
+
+## Dynamic process addition
+
+Python's `signal.signal()` requires the main thread, so **textual must run on the main thread**. `PanelRunner.run_with(fn)` handles this:
+- runs `PanelApp.run()` on the main thread (blocking)
+- fires `ready_callback` from `PanelApp.on_mount` once the TUI is up
+- `ready_callback` starts a daemon thread running `fn(add_live)`
+- `add_live(cmd, title)` calls `app.call_from_thread(app.add_process, cmd, title)`
+- `add_process` creates `TabPane(title, ProcessPanel(cmd), id=tab_id)` and calls `TabbedContent.add_pane()`
+
+Do **not** attempt `start()` + background thread for the TUI — signal handlers will raise `ValueError`.
 
 ## Navigation modes
 

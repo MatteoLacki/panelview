@@ -46,29 +46,42 @@ class PanelApp(App):
         ("ctrl+x",      "close_tab",     "Close"),
     ]
 
-    def __init__(self, jobs: list[dict]) -> None:
+    def __init__(self, jobs: list[dict], ready_callback=None) -> None:
         super().__init__()
         self._jobs = jobs
+        self._ready_callback = ready_callback
         self._mode = "tabs"   # "tabs" | "stream"
-        self._tab_ids: list[str] = []
         self._panel_map: dict[str, ProcessPanel] = {}  # tab_id -> panel
+        self._counter = 0  # monotonic counter for unique tab/panel IDs
+
+    def _next_ids(self, title: str | None) -> tuple[str, str, str]:
+        """Return (tab_id, panel_id, title) and advance counter."""
+        i = self._counter
+        self._counter += 1
+        return f"tab-{i}", f"panel-{i}", title or f"Process {i + 1}"
 
     def compose(self) -> ComposeResult:
         with TabbedContent():
-            for i, job in enumerate(self._jobs):
-                cmd = job["cmd"]
-                title = job.get("title") or f"Process {i + 1}"
-                tab_id = f"tab-{i}"
-                self._tab_ids.append(tab_id)
+            for job in self._jobs:
+                tab_id, panel_id, title = self._next_ids(job.get("title"))
                 with TabPane(title, id=tab_id):
-                    yield ProcessPanel(cmd, id=f"panel-{i}")
+                    yield ProcessPanel(job["cmd"], id=panel_id)
         yield Footer()
 
     def on_mount(self) -> None:
-        for i, job in enumerate(self._jobs):
-            panel = self.query_one(f"#panel-{i}", ProcessPanel)
-            self._panel_map[f"tab-{i}"] = panel
+        for panel in self.query(ProcessPanel):
+            tab_id = panel.id.replace("panel-", "tab-", 1)
+            self._panel_map[tab_id] = panel
         self._focus_current_log()
+        if self._ready_callback:
+            self._ready_callback()
+
+    def add_process(self, cmd: str | list, title: str | None = None) -> None:
+        """Add a new tab at runtime. Must be called on the main thread."""
+        tab_id, panel_id, title = self._next_ids(title)
+        panel = ProcessPanel(cmd, id=panel_id)
+        self._panel_map[tab_id] = panel
+        self.query_one(TabbedContent).add_pane(TabPane(title, panel, id=tab_id))
 
     # --- tab title updates ---
 

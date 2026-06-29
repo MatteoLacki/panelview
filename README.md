@@ -37,7 +37,7 @@ panelview -t align   "bwa mem ref.fa reads.fq > out.bam" \
 
 Without `-t`, tabs are numbered `Process 1`, `Process 2`, etc.
 
-### Python API
+### Python API — static (all processes known upfront)
 
 ```python
 from panelview import PanelRunner
@@ -47,6 +47,29 @@ runner.add("bwa mem ref.fa reads.fq > out.bam", title="align")
 runner.add("featureCounts -a genes.gtf out.bam -o counts.txt", title="count")
 runner.run()
 ```
+
+### Python API — dynamic (add processes as they are created)
+
+The TUI must stay on the main thread (Python signal constraint). Pass a callback to `run_with()`; it runs in a background thread and receives `add_live` for spawning new tabs:
+
+```python
+import time
+from panelview import PanelRunner
+
+def pipeline(add_live):
+    time.sleep(3)                          # wait for stage-1 to finish
+    add_live("cmd_stage2a", title="2a")
+    add_live("cmd_stage2b", title="2b")
+    time.sleep(3)                          # wait for stage-2 to finish
+    add_live("cmd_stage3",  title="3")
+
+runner = PanelRunner()
+runner.add("cmd_stage1a", title="1a")
+runner.add("cmd_stage1b", title="1b")
+runner.run_with(pipeline)                  # blocks until TUI is closed
+```
+
+See `examples/demo_live.py` for a runnable pipeline simulation.
 
 ## Keys
 

@@ -19,6 +19,10 @@ demo: $(STAMP)
 	  -t noisyman 'for i in 1 2 3 4 5 6 7 8; do echo "out $$i"; sleep 0.25; echo "err $$i" >&2; sleep 0.25; done' \
 	  -t burster  'for i in $$(seq 1 20); do echo "burst $$i of 20"; done; sleep 2'
 
+# Live demo: new tabs are added dynamically as earlier processes finish.
+demo-live: $(STAMP)
+	$(PYTHON) examples/demo_live.py
+
 # Same but one exits non-zero — shows [failed N] in tab title.
 demo-fail: $(STAMP)
 	$(PV) \

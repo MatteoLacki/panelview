@@ -76,6 +76,9 @@ class ProcessPanel(Widget):
     # --- subprocess streaming ---
 
     def _stream_process(self) -> None:
+        # Capture app reference here — we're inside run_worker which has the
+        # textual context var set. Child threads we spawn below do not inherit it.
+        app = self.app
         shell = isinstance(self._cmd, str)
         try:
             self._proc = subprocess.Popen(
@@ -87,23 +90,23 @@ class ProcessPanel(Widget):
                 bufsize=1,
             )
             t_out = threading.Thread(
-                target=self._read_pipe, args=(self._proc.stdout, self._log_stdout), daemon=True
+                target=self._read_pipe, args=(self._proc.stdout, self._log_stdout, app), daemon=True
             )
             t_err = threading.Thread(
-                target=self._read_pipe, args=(self._proc.stderr, self._log_stderr), daemon=True
+                target=self._read_pipe, args=(self._proc.stderr, self._log_stderr, app), daemon=True
             )
             t_out.start()
             t_err.start()
             t_out.join()
             t_err.join()
             self._proc.wait()
-            self.app.call_from_thread(self._set_done, self._proc.returncode)
+            app.call_from_thread(self._set_done, self._proc.returncode)
         except Exception as exc:
-            self.app.call_from_thread(self._notify_error, str(exc))
+            app.call_from_thread(self._notify_error, str(exc))
 
-    def _read_pipe(self, pipe, log: RichLog) -> None:
+    def _read_pipe(self, pipe, log: RichLog, app) -> None:
         for line in pipe:
-            self.app.call_from_thread(log.write, line.rstrip("\n"))
+            app.call_from_thread(log.write, line.rstrip("\n"))
 
     def _set_done(self, returncode: int) -> None:
         # Notify the app to update the tab title.

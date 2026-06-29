@@ -1,5 +1,7 @@
 # panelview
 
+![panelview demo](images/demo.svg)
+
 TUI for watching multiple subprocesses in parallel. Each process gets a full-window browser-style tab with independent stdout/stderr views and live scrollable output.
 
 ## Install

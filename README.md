@@ -40,28 +40,44 @@ runner.run()
 
 ## Keys
 
+Each process occupies a full-window tab. There are two navigation modes:
+
+**Tab mode** (default)
+
 | Key | Action |
 |-----|--------|
-| `Tab` / `Shift+Tab` | Move focus to next / previous panel |
-| `↑ ↓ PgUp PgDn` | Scroll within the focused panel |
-| `e` | Toggle between stdout and stderr for the focused panel |
-| `s` | Open signal menu — send a signal to the focused panel's process |
-| `q` | Quit; terminate all running processes |
+| `Shift+←` / `Shift+→` | Switch to previous / next tab |
+| `Shift+↓` | Enter stream-select mode for the current tab |
+| `↑` `↓` `PgUp` `PgDn` | Scroll output up / down |
+| `Ctrl+C` | Open stop menu (kill current / kill all / exit) |
+| `Ctrl+X` | Kill current process and close its tab |
 
-## Signal menu
+**Stream-select mode** (entered with `Shift+↓`)
 
-Press `s` on any running process to open a list of common signals:
-`SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`, `SIGKILL`, `SIGSTOP`, `SIGCONT`.
-Arrow keys navigate, `Enter` sends, `Escape` cancels.
+| Key | Action |
+|-----|--------|
+| `Shift+←` | Switch to stdout |
+| `Shift+→` | Switch to stderr |
+| `Shift+↑` | Return to tab mode |
 
-## Panel states
+A bar appears at the top of the panel showing which stream is active while in stream-select mode.
 
-| State | Meaning |
-|-------|---------|
-| `[running]` | Process still running |
+## Stop menu (`Ctrl+C`)
+
+Opens a modal with three choices (arrow keys + `Enter` to select, `Escape` to cancel):
+
+- **Send SIGTERM to current process** — politely stop the focused tab's process
+- **Send SIGTERM to all processes** — stop everything
+- **Kill all and exit** — SIGTERM all processes and quit panelview
+
+## Tab states
+
+Finished processes keep their tab; the tab title gains a suffix:
+
+| Suffix | Meaning |
+|--------|---------|
 | `[done 0]` | Exited cleanly |
-| `[failed N]` | Exited with code N (title turns red) |
-| `[error: ...]` | Failed to launch |
+| `[failed N]` | Exited with code N |
 
 ## Requirements
 

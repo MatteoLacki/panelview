@@ -10,13 +10,17 @@ class PanelApp(App):
     """Browser-style tabbed TUI: one full-window tab per subprocess."""
 
     CSS = """
-    TabbedContent, TabPane {
+    TabbedContent {
         height: 1fr;
+    }
+    TabPane {
         padding: 0;
+        height: 100%;
     }
     ProcessPanel {
-        height: 1fr;
-        width: 1fr;
+        layout: vertical;
+        height: 100%;
+        width: 100%;
     }
     RichLog {
         height: 1fr;
@@ -54,7 +58,7 @@ class PanelApp(App):
         with TabbedContent():
             for i, job in enumerate(self._jobs):
                 cmd = job["cmd"]
-                title = job.get("title") or (cmd if isinstance(cmd, str) else " ".join(cmd))
+                title = job.get("title") or f"Process {i + 1}"
                 tab_id = f"tab-{i}"
                 self._tab_ids.append(tab_id)
                 with TabPane(title, id=tab_id):

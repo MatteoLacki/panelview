@@ -10,21 +10,21 @@ import time
 from panelview import PanelRunner
 
 
-def pipeline(add_live):
+def pipeline(runner):
     # Stage 1 runs for ~2-3 s; then spawn stage 2 in parallel.
     time.sleep(3.5)
-    add_live(
+    runner.add_live(
         'for i in 1 2 3 4; do echo "stage-2a: step $i"; sleep 0.5; done',
         title="stage-2a",
     )
-    add_live(
+    runner.add_live(
         'for i in 1 2 3; do echo "stage-2b: step $i"; sleep 0.7; done',
         title="stage-2b",
     )
 
     # Stage 2 runs for another ~2-3 s; then spawn the final stage.
     time.sleep(3.5)
-    add_live(
+    runner.add_live(
         'echo "stage-3: all upstream done"; sleep 1; echo "stage-3: pipeline complete"',
         title="stage-3",
     )

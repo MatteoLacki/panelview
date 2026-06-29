@@ -13,18 +13,25 @@ from textual.widgets import Label, RichLog
 
 
 class ProcessPanel(Widget):
-    """Full-window panel: stream bar + scrollable stdout or stderr."""
+    """Full-window panel: stream bar + scrollable stdout or stderr.
+
+    cmd=None creates a passive panel; output is fed externally via _write_line_safe
+    and _set_done (called on the main thread, e.g. via app.call_from_thread).
+    """
 
     CAN_FOCUS = False  # focus goes to the inner RichLog, not the panel itself
 
     active_stream: reactive[str] = reactive("stdout")
 
-    def __init__(self, cmd: str | list, **kwargs: Any) -> None:
+    def __init__(self, cmd: str | list | None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._cmd = cmd
         self._proc: subprocess.Popen | None = None
         self._log_stdout: RichLog | None = None
         self._log_stderr: RichLog | None = None
+        # Lines written before on_mount completes are held here and flushed on mount.
+        # Access only from the main thread (via call_from_thread) — no lock needed.
+        self._pre_mount_buffer: list[tuple[str, str]] = []
 
     def compose(self) -> ComposeResult:
         yield Label("", id="stream-bar", classes="hidden")
@@ -34,7 +41,21 @@ class ProcessPanel(Widget):
     def on_mount(self) -> None:
         self._log_stdout = self.query_one("#log-stdout", RichLog)
         self._log_stderr = self.query_one("#log-stderr", RichLog)
-        self.run_worker(self._stream_process, thread=True)
+        for stream, line in self._pre_mount_buffer:
+            (self._log_stdout if stream == "stdout" else self._log_stderr).write(line)
+        self._pre_mount_buffer.clear()
+        if self._cmd is not None:
+            self.run_worker(self._stream_process, thread=True)
+
+    # --- passive mode: external output feeding ---
+
+    def _write_line_safe(self, stream: str, line: str) -> None:
+        """Write a line to stdout or stderr log. Must be called on the main thread."""
+        log = self._log_stdout if stream == "stdout" else self._log_stderr
+        if log is not None:
+            log.write(line)
+        else:
+            self._pre_mount_buffer.append((stream, line))
 
     # --- stream mode bar ---
 
@@ -109,7 +130,6 @@ class ProcessPanel(Widget):
             app.call_from_thread(log.write, line.rstrip("\n"))
 
     def _set_done(self, returncode: int) -> None:
-        # Notify the app to update the tab title.
         self.post_message(self.Done(self, returncode))
 
     def _notify_error(self, msg: str) -> None:

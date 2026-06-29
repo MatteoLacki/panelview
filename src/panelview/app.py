@@ -77,11 +77,20 @@ class PanelApp(App):
             self._ready_callback()
 
     def add_process(self, cmd: str | list, title: str | None = None) -> None:
-        """Add a new tab at runtime. Must be called on the main thread."""
+        """Add a new active tab at runtime. Must be called on the main thread."""
         tab_id, panel_id, title = self._next_ids(title)
         panel = ProcessPanel(cmd, id=panel_id)
         self._panel_map[tab_id] = panel
         self.query_one(TabbedContent).add_pane(TabPane(title, panel, id=tab_id))
+
+    def add_passive(self, title: str | None = None) -> "PanelWriter":
+        """Add a passive tab (no subprocess) and return a writer for it. Main thread only."""
+        from panelview.writer import PanelWriter
+        tab_id, panel_id, title = self._next_ids(title)
+        panel = ProcessPanel(None, id=panel_id)
+        self._panel_map[tab_id] = panel
+        self.query_one(TabbedContent).add_pane(TabPane(title, panel, id=tab_id))
+        return PanelWriter(panel, self)
 
     # --- tab title updates ---
 
